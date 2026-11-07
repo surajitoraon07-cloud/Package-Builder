@@ -1,5 +1,5 @@
 """Package Builder server (Python 3 standard library only).
-Run:  python server.py     then open http://127.0.0.1:8000
+Run:  python server.py     then open http://127.0.0.1:10000
 Packages are stored in the SQLite database file 'packages.db' next to this file.
 Use  python server.py lan  to let other computers on your Wi-Fi/office network open it."""
 import glob, json, os, re, sqlite3, sys, threading, webbrowser
@@ -80,10 +80,10 @@ class H(BaseHTTPRequestHandler):
 if __name__ == '__main__':
     init()
     host = '0.0.0.0' if 'lan' in sys.argv else '127.0.0.1'
-    srv = ThreadingHTTPServer((host, 8000), H)
-    print('Package Builder running at http://127.0.0.1:8000  (Ctrl+C to stop)')
+    srv = ThreadingHTTPServer((host, 10000), H)
+    print('Package Builder running at http://127.0.0.1:10000  (Ctrl+C to stop)')
     if host == '127.0.0.1':
-        threading.Timer(1, lambda: webbrowser.open('http://127.0.0.1:8000')).start()
+        threading.Timer(1, lambda: webbrowser.open('http://127.0.0.1:10000')).start()
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
