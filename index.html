@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Package Builder</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root{--bg:#f3f7f7;--fg:#1f2a33;--card:#fff;--line:#d5dfdf;--acc:#0f5257;--hi:#f08a24;--mut:#5d6b73;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121a1c;--fg:#e6eeee;--card:#1b2629;--line:#33454a;--acc:#63c1c6;--hi:#ffb15c;--mut:#9fb0b4;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#121a1c;--fg:#e6eeee;--card:#1b2629;--line:#33454a;--acc:#63c1c6;--hi:#ffb15c;--mut:#9fb0b4;color-scheme:dark}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,"Segoe UI",Arial,sans-serif}
+main{max-width:1100px;margin:0 auto;padding:16px}h1{font:700 22px Georgia,serif;color:var(--acc);margin:4px 0 12px}h2{font-size:15px;margin:0 0 10px;color:var(--acc)}
+.g{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}.c{background:var(--card);border:1px solid var(--line);border-top:3px solid var(--hi);padding:12px 14px}
+label{display:block;font-size:12px;color:var(--mut);margin:8px 0 3px}input,select{width:100%;padding:7px 8px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font:inherit}
+.r{display:grid;grid-template-columns:1fr 1fr;gap:8px}#dest label,.sp{display:inline-block;width:auto;margin:2px 10px 2px 0;color:var(--fg);font-size:14px}#dest input,#split input{width:auto}#split input{width:60px}
+button{background:var(--acc);color:var(--card);border:0;padding:8px 14px;font:inherit;cursor:pointer;margin:8px 6px 0 0}button.s{background:none;color:var(--acc);border:1px solid var(--acc)}
+ul{list-style:none;margin:0;padding:0}li{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding:4px 0}li button{margin:0;padding:2px 8px;font-size:12px}
+#msg{margin:10px 0;color:var(--hi);font-weight:600;white-space:pre-line}iframe{width:100%;height:85vh;border:1px solid var(--line);background:#cfdcdc;margin-top:10px;display:none}small{color:var(--mut)}
+</style></head><body><main>
+<h1>Trip Package Builder</h1>
+<div class="g">
+<div class="c"><h2>1. Package library</h2><ul id="libl"></ul>
+<label>Upload a package (HTML)</label><input type="file" id="file" accept=".html,.htm">
+<label>Destination name</label><input id="dn" placeholder="e.g. Gangtok"><button id="up">Save to library</button>
+<small>Use files made from your quotation template. Uploading the same destination again replaces it.</small></div>
+<div class="c"><h2>2. New quotation</h2>
+<label>Customer name</label><input id="nm"><label>Customer phone</label><input id="ph" placeholder="+91 ...">
+<label>Destination(s), in travel order</label><div id="dest"></div>
+<div class="r"><div><label>Total days</label><input id="dy" type="number" min="3" value="3"></div><div><label>Trip type</label><select id="ty"><option>Private</option><option>Sharing</option><option>Solo</option><option>Strangers</option></select></div>
+<div><label>Adults</label><input id="ad" type="number" min="1" value="2"></div><div><label>Children</label><input id="ch" type="number" min="0" value="0"></div>
+<div><label>Children’s ages (optional)</label><input id="ag" placeholder="e.g. 5 yrs &amp; 8 yrs"></div><div><label>Travel date (optional)</label><input id="dt" type="date"></div>
+<div><label>Total amount ₹ (optional)</label><input id="am" type="number" min="0"></div></div>
+<div id="split"></div><button id="go">Generate quotation</button></div></div>
+<div id="msg"></div>
+<div id="bar" style="display:none"><button id="pr">Print / Save as PDF</button><button class="s" id="ed">Edit text</button><button class="s" id="dl">Download HTML</button></div>
+<iframe id="fr"></iframe>
+</main>
+<script>
+const $=id=>document.getElementById(id),msg=t=>{$('msg').textContent=t};
+const lib={};let sel=[],last='';
+let mode='local';
+async function load(){try{const r=await fetch('/api/packages');if(!r.ok)throw 0;(await r.json()).forEach(v=>lib[v.name]=v);mode='server'}catch(e){try{JSON.parse(localStorage.getItem('pkgs')||'[]').forEach(v=>lib[v.name]=v)}catch(x){}msg('Server not running: packages are saved in this browser only. Run server.py to keep them on disk.')}drawLib()}
+async function save(v){if(mode==='server'){const r=await fetch('/api/packages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(v)});if(!r.ok)throw new Error('server error')}else localStorage.setItem('pkgs',JSON.stringify(Object.values(lib)))}
+async function del(k){if(mode==='server')await fetch('/api/packages/'+encodeURIComponent(slug(k)),{method:'DELETE'});else localStorage.setItem('pkgs',JSON.stringify(Object.values(lib)))}
+const TY={Private:null,Sharing:['Sharing','Shared cab with other guests, fixed pickup & drop','SHARED CAB','Shared Cab'],Solo:['Solo','Solo traveller, shared cab seat, fixed pickup & drop','SHARED CAB','Shared Cab'],Strangers:['Strangers group','Group trip with other travellers, shared cab, fixed pickup & drop','SHARED CAB','Shared Cab']};
+const slug=k=>k.toLowerCase().replace(/[^a-z0-9]+/g,'-');
+const parse=h=>{const d=new DOMParser().parseFromString(h,'text/html');d.querySelectorAll('script').forEach(s=>s.remove());return d};
+const rep=(root,pairs)=>{const w=root.ownerDocument.createTreeWalker(root,4);let n;while(n=w.nextNode())for(const[a,b]of pairs){if(a==null)continue;n.nodeValue=typeof a==='string'?n.nodeValue.split(a).join(b):n.nodeValue.replace(a,()=>b)}};
+const info=d=>{const b=d.querySelectorAll('.box');return{name:b[0].childNodes[1].textContent.trim(),phone:(b[0].textContent.match(/Ph:\s*(\+?[\d ]+\d)/)||[])[1],tot:(d.querySelector('.cost .amt').textContent.match(/([\d,]+)\/-/)||[])[1]}};
+const days=d=>[...d.querySelectorAll('.day')].map(e=>({t:e.querySelector('h3 span').textContent.replace(/^Day \d+:\s*/,''),tag:e.querySelector('.tag').textContent,p:e.querySelector('p').textContent,chips:[...e.querySelectorAll('.chips span')].map(s=>s.textContent)}));
+// Keep arrival (first) and departure (last) fixed; spread the middle days' items evenly, in order, across the new middle days.
+function plan(d,D){const a=days(d);if(D===a.length)return a;const mid=a.slice(1,-1),items=mid.flatMap(x=>x.chips),m=D-2,stay=((mid[0]||{p:''}).p.match(/Overnight stay[^.]*\./)||['Overnight stay at hotel.'])[0],out=[a[0]];
+for(let i=0;i<m;i++){const c=items.slice(Math.round(i*items.length/m),Math.round((i+1)*items.length/m));out.push(c.length?{t:c.slice(0,2).join(' & '),tag:'SIGHTSEEING DAY',p:'After breakfast, enjoy '+c.join(', ')+'. '+stay,chips:c}:{t:'Leisure Day at Own Pace',tag:'LEISURE DAY',p:'Free day to relax or explore local markets at your own pace. '+stay,chips:[]})}
+out.push(a[a.length-1]);return out}
+function build(o){const n=sel.length,P=sel.map(k=>{const d=parse(lib[k].html);return{k,d,i:info(d)}}),W=[];
+let sp=[o.D];if(n>1){sp=[...document.querySelectorAll('input.sp')].map(x=>+x.value);if(sp.some(x=>x<3)||sp.reduce((s,x)=>s+x,0)-(n-1)!==o.D)return msg('Days per destination must be 3+ each and add up to the total days (each hand-over between destinations shares one day).')}
+const base=P[0].d,old=[...base.querySelectorAll('.day')],tpl=old[0],all=[];
+P.forEach((p,i)=>{const x=plan(p.d,sp[i]);if(i<n-1)x.pop();if(i>0){const v=P[i-1].k;x[0]={t:`${v} to ${p.k} Transfer & Check-in`,tag:'TRANSFER DAY',p:`After breakfast, check out and transfer by road from ${v} to ${p.k}. Check-in at your hotel in ${p.k}. Free evening. Dinner & overnight stay at hotel.`,chips:[`${v} to ${p.k} transfer`,'Hotel check-in']}}all.push(...x)});
+all.forEach((x,k)=>{const e=tpl.cloneNode(true);e.className='day d'+(k%3+1);e.querySelector('h3 span').textContent=`Day ${String(k+1).padStart(2,'0')}: ${x.t}`;e.querySelector('.tag').textContent=x.tag;e.querySelector('p').textContent=x.p;const c=e.querySelector('.chips');c.innerHTML='';x.chips.forEach(t=>{const s=base.createElement('span');s.textContent=t;c.append(s)});if(x.chips.length>5)W.push(`Day ${k+1} has ${x.chips.length} items, so it may be too packed.`);tpl.before(e)});
+old.forEach(e=>e.remove());
+const nt=(e,N)=>rep(e,[[/\b\d+ Nights?\b/g,`${N} Night${N>1?'s':''}`]]),r0=base.querySelector('.row'),l0=base.querySelector('.in li');
+P.forEach((p,i)=>{const r=base.importNode(p.d.querySelector('.row'),true),l=base.importNode(p.d.querySelector('.in li'),true);nt(r,sp[i]-1);nt(l,sp[i]-1);r0.before(r);l0.before(l)});r0.remove();l0.remove();
+if(!o.c)base.querySelectorAll('.in li,.t p').forEach(e=>{if(/Child/.test(e.textContent))e.remove()});
+const T=TY[o.type],bx=base.querySelectorAll('.box')[2];if(T){bx.childNodes[1].textContent=T[0];bx.childNodes[3].textContent=T[1];W.push('Trip type is not Private: vehicle wording was changed to "Shared Cab". Please review it.')}
+const ag=o.c&&o.ages,f=v=>Math.round(v).toLocaleString('en-IN'),i0=P[0].i,dt=o.date?new Date(o.date+'T00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'';
+const pax=`${o.a} Adult${o.a>1?'s':''}`+(o.c?` + ${o.c} Kid${o.c>1?'s':''}`:'');
+const R=[[i0.name,o.name],[i0.phone,o.phone],[/\d+N\/\d+D/g,`${o.D-1}N/${o.D}D`],[/Detailed \d+-Day/,`Detailed ${o.D}-Day`],[/\d{1,2} [A-Za-z]{3,9} • /,dt?dt+' • ':''],[/\d+ Adults?(?: \+ \d+ Kids?)?/g,pax],
+[/\s*\(Kids: [^)]*\)/g,ag?` (Kids: ${ag})`:''],[/Children \([^)]*\) stay/g,ag?`Children (${ag}) stay`:'Children stay'],[/Children aged [^]*? are accommodated/g,ag?`Children aged ${ag} are accommodated`:'Children are accommodated']];
+if(T)R.push([/PRIVATE WAGONR/g,T[2]],[/(?:Dedicated )?Private (?:dedicated )?WagonR(?: Cab)?/gi,T[3]]);
+if(o.amt&&i0.tot){const T0=+i0.tot.replace(/,/g,''),A0=Math.round(T0*.3),A=Math.round(o.amt*.3);R.push([f(T0)+'/-','\u0001T'],[f(T0-A0)+'/-','\u0001B'],[f(A0)+'/-','\u0001A'],[/\u0001T/g,f(o.amt)+'/-'],[/\u0001B/g,f(o.amt-A)+'/-'],[/\u0001A/g,f(A)+'/-'])}else W.push('Price is still the stored one. Enter a total amount or use Edit text before sending.');
+rep(base.body,R);const L=sel.join(' & ');rep(base.querySelector('h1'),[[P[0].k,L]]);base.querySelectorAll('.foot').forEach(e=>rep(e,[[P[0].k,L]]));
+base.title=`${o.name} - ${L} ${o.D-1}N/${o.D}D`;
+return{html:'<!DOCTYPE html>'+base.documentElement.outerHTML,W,title:base.title}}
+$('go').onclick=()=>{const v=id=>$(id).value.trim(),o={name:v('nm'),phone:v('ph'),D:+v('dy'),a:+v('ad'),c:+v('ch')||0,ages:v('ag'),date:v('dt'),amt:+v('am')||0,type:v('ty')};
+if(!sel.length||!o.name||!o.phone||o.a<1)return msg('Please enter name, phone, adults and choose at least one destination.');
+if(o.D<3)return msg('Minimum 3 days.');let r;try{r=build(o)}catch(e){return msg('Could not build: '+e.message)}if(!r)return;
+last=r;$('fr').style.display='block';$('bar').style.display='block';$('fr').srcdoc=r.html;msg(r.W.join('\n')||'Done. Review the preview, then click Print / Save as PDF.');$('ed').textContent='Edit text'};
+$('pr').onclick=()=>{$('fr').contentWindow.focus();$('fr').contentWindow.print()};
+$('ed').onclick=()=>{const d=$('fr').contentDocument;d.designMode=d.designMode==='on'?'off':'on';$('ed').textContent=d.designMode==='on'?'Done editing':'Edit text'};
+$('dl').onclick=()=>{const h='<!DOCTYPE html>'+$('fr').contentDocument.documentElement.outerHTML,a=document.createElement('a');a.href=URL.createObjectURL(new Blob([h],{type:'text/html'}));a.download=last.title.replace(/[^\w\- ]+/g,'')+'.html';a.click()};
+function drawSplit(){const n=sel.length,S=(+$('dy').value||0)+n-1;$('split').innerHTML=n>1?'<label>Days per destination</label>'+sel.map((k,i)=>`<span class="sp">${k} <input class="sp" type="number" min="3" value="${Math.floor(S/n)+(i<S%n?1:0)}"></span>`).join(''):''}
+function drawLib(){const ks=Object.keys(lib);sel=sel.filter(k=>lib[k]);$('libl').innerHTML=ks.map(k=>`<li>${k}<button class="s" data-d="${k}">Delete</button></li>`).join('')||'<li><small>No packages saved yet.</small></li>';$('dest').innerHTML=ks.map(k=>`<label><input type="checkbox" value="${k}" ${sel.includes(k)?'checked':''}> ${k}</label>`).join('');drawSplit()}
+$('dest').onchange=e=>{const k=e.target.value;sel=e.target.checked?[...sel,k]:sel.filter(x=>x!==k);drawSplit()};$('dy').oninput=drawSplit;
+$('libl').onclick=e=>{const k=e.target.dataset.d;if(!k)return;if(e.target.textContent==='Delete'){e.target.textContent='Sure?';return}delete lib[k];del(k).catch(()=>{});drawLib()};
+$('file').onchange=async()=>{const f=$('file').files[0];if(f&&!$('dn').value)$('dn').value=parse(await f.text()).title.split(/ \d/)[0]};
+$('up').onclick=async()=>{const f=$('file').files[0],nm=$('dn').value.trim().replace(/[<>&"]/g,'');if(!f||!nm)return msg('Choose a file and enter a destination name.');const html=await f.text(),d=parse(html);
+try{info(d);if(d.querySelectorAll('.day').length<3||d.querySelectorAll('.box').length<4)throw 0}catch(e){return msg('This file does not match the quotation template (needs 4 info boxes, 3+ day blocks and a cost block).')}
+lib[nm]={name:nm,html};drawLib();try{await save({name:nm,html});msg(`${nm} saved.`)}catch(e){msg('Could not store it: '+(e.message||e))}$('file').value='';$('dn').value=''};
+drawLib();
+load();
+</script></body></html>
