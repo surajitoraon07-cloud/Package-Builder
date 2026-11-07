@@ -1,0 +1,8 @@
+# Package Builder: Python dependencies
+#
+# This project uses ONLY the Python standard library
+# (http.server, sqlite3, json, re, os, glob, threading, webbrowser).
+# There is nothing to install with pip.
+#
+# Requires: Python 3.8 or newer
+# Run with: python server.py   (Windows: double-click start.bat)
