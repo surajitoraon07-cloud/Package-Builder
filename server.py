@@ -79,7 +79,7 @@ class H(BaseHTTPRequestHandler):
 
 if __name__ == '__main__':
     init()
-    host = '8000' if 'lan' in sys.argv else '127.0.0.1'
+    host = '0.0.0.0' if 'lan' in sys.argv else '127.0.0.1'
     srv = ThreadingHTTPServer((host, 8000), H)
     print('Package Builder running at http://127.0.0.1:8000  (Ctrl+C to stop)')
     if host == '127.0.0.1':
